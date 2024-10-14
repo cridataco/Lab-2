@@ -2,10 +2,14 @@ const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const { io } = require("socket.io-client");  
+const { io } = require("socket.io-client");
+const multer = require("multer");
 
 const app = express();
 const port = process.env.MIDDLEWAREPORT || 5001;
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 app.use(cors());
 app.use(express.json());
@@ -15,7 +19,7 @@ let servers = [];
 let serverHealth = new Map();
 let currentIndex = 0;
 
-const socket = io("http://localhost:5000"); 
+const socket = io("http://localhost:5000");
 
 socket.on('updateServers', (updatedServers) => {
   servers = updatedServers.map(s => s.server);
@@ -36,15 +40,19 @@ const balanceLoad = async (req, res) => {
   }
 
   try {
-    const response = await axios.post(`${server}/add-watermark`, req.body);
-    return res.json(response.data); 
+    const response = await axios.post(`${server}/add-watermark`, req.body, {
+      headers: {
+        'Content-Type': 'multipart/form-data' 
+      }
+    });
+    return res.json(response.data);
   } catch (error) {
     console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);
     return res.status(500).send(`Error en el servidor ${server}`);
   }
 };
 
-app.post('/api/add-watermark', balanceLoad);
+app.post('/api/add-watermark', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
   console.log(`Balanceador de carga ejecutándose en el puerto ${port}`);
