@@ -1,9 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const { Server } = require("socket.io");
+const http = require("http");
 
 const app = express();
 const port = 5000;
+
+const server = http.createServer(app);
+const io = new Server(server);
 
 let servers = [];
 let serverHealth = new Map();
@@ -17,6 +22,8 @@ app.post('/register', (req, res) => {
     servers.push(server);
     serverHealth.set(server, 'UNKNOWN'); 
     console.log(`Servidor registrado: ${server}`);
+
+    io.emit('updateServers', servers);
     res.sendStatus(200);
   } else {
     console.log(`El servidor ya está registrado: ${server}`);
@@ -38,6 +45,12 @@ const performHealthCheck = async () => {
       serverHealth.set(server, 'DOWN');
     }
   }
+
+  io.emit('updateServers', servers.map(s => ({
+    server: s,
+    status: serverHealth.get(s),
+    timestamp: new Date(),
+  })));
 };
 
 setInterval(performHealthCheck, 5000);
@@ -51,6 +64,6 @@ app.get('/health-status', (req, res) => {
   res.json(serverStatuses);
 });
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server Registry ejecutándose en el puerto ${port}`);
 });

@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const { io } = require("socket.io-client");  
 
 const app = express();
 const port = process.env.MIDDLEWAREPORT || 5001;
@@ -11,19 +12,16 @@ app.use(express.json());
 app.use(bodyParser.json());
 
 let servers = [];
+let serverHealth = new Map();
 let currentIndex = 0;
 
-const fetchServersFromRegistry = async () => {
-  try {
-    const response = await axios.get('http://localhost:5000/servers'); 
-    servers = response.data;
-    console.log("Servidores actualizados:", servers);
-  } catch (error) {
-    console.error("Error al obtener servidores del registry:", error.message);
-  }
-};
+const socket = io("http://localhost:5000"); 
 
-setInterval(fetchServersFromRegistry, 5000);
+socket.on('updateServers', (updatedServers) => {
+  servers = updatedServers.map(s => s.server);
+  serverHealth = new Map(updatedServers.map(s => [s.server, s.status]));
+  console.log("Servidores actualizados vía WebSockets:", servers, serverHealth);
+});
 
 const balanceLoad = async (req, res) => {
   if (servers.length === 0) {
@@ -32,6 +30,10 @@ const balanceLoad = async (req, res) => {
 
   let server = servers[currentIndex];
   currentIndex = (currentIndex + 1) % servers.length;
+
+  if (serverHealth.get(server) !== 'UP') {
+    return res.status(503).send(`Servidor ${server} no disponible`);
+  }
 
   try {
     const response = await axios.post(`${server}/add-watermark`, req.body);
