@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const formData = new FormData();
-        formData.append('image', file);
-        formData.append('watermark', text);
+        formData.append('image', file);  
+        formData.append('watermarkText', text);  
 
         try {
             const response = await fetch('http://localhost:5001/api/add-watermark', {
@@ -28,7 +28,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await response.json();
             console.log('Respuesta del servidor:', result);
-            // Aquí puedes mostrar un mensaje de éxito o manejar la respuesta
+
+            const img = document.createElement('img');
+            img.src = `data:image/png;base64,${result.watermarkedImage}`;  
+            document.getElementById('serverData').innerHTML = '';
+            document.getElementById('serverData').appendChild(img);
+
         } catch (error) {
             console.error('Error al subir la imagen:', error);
             alert('Ocurrió un error al subir la imagen. Inténtalo de nuevo.');

@@ -21,7 +21,7 @@ h1 {
 
 input[type="file"],
 input[type="text"] {
-    width: calc(100% - 22px); /* Ajustar el ancho para el padding */
+    width: calc(100% - 22px); 
     padding: 10px;
     margin-bottom: 20px;
     border: 1px solid #ccc;

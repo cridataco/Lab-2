@@ -4,6 +4,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const { io } = require("socket.io-client");
 const multer = require("multer");
+const FormData = require('form-data');
 
 const app = express();
 const port = process.env.MIDDLEWAREPORT || 5001;
@@ -40,11 +41,16 @@ const balanceLoad = async (req, res) => {
   }
 
   try {
-    const response = await axios.post(`${server}/add-watermark`, req.body, {
+    const formData = new FormData();
+    formData.append('image', req.file.buffer, req.file.originalname);
+    formData.append('watermarkText', req.body.watermarkText); 
+
+    const response = await axios.post(`${server}/add-watermark`, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data' 
-      }
+        ...formData.getHeaders(),
+      },
     });
+
     return res.json(response.data);
   } catch (error) {
     console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);

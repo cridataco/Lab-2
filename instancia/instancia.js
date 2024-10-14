@@ -1,11 +1,13 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const Jimp = require('jimp');  
+const sharp = require('sharp');
 const axios = require('axios');
 const cors = require('cors');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
-const port = process.env.PORT || 9200; 
+const port = process.env.PORT || 9200;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -15,35 +17,41 @@ app.get('/health', (req, res) => {
     res.sendStatus(200);
 });
 
-app.post('/add-watermark', async (req, res) => {
+app.post('/add-watermark', upload.single('image'), async (req, res) => {
     try {
-        const { image, watermarkText } = req.body;  
+        const { buffer } = req.file;
+        const { watermarkText } = req.body; 
 
-        if (!image || !watermarkText) {
+        if (!buffer || !watermarkText) {
             return res.status(400).send('Faltan datos');
         }
 
-        // Convertir la imagen base64 a un buffer
-        const buffer = Buffer.from(image.split(',')[1], 'base64');
+        const image = sharp(buffer);
+        const { width, height } = await image.metadata();
+        
+        const watermarkedImage = await image
+            .composite([{
+                input: Buffer.from(
+                    `<svg width="${width}" height="${height}">
+                        <text x="10" y="50" font-size="40" fill="white">${watermarkText}</text>
+                    </svg>`
+                ),
+                gravity: 'southeast'
+            }])
+            .png()
+            .toBuffer();
 
-        // Cargar la imagen y agregar la marca de agua usando Jimp
-        const loadedImage = await Jimp.read(buffer);
-        const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
-        loadedImage.print(font, 10, 10, watermarkText);  // Imprimir la marca de agua en la esquina superior izquierda
-
-        // Convertir la imagen de vuelta a base64
-        const watermarkedImage = await loadedImage.getBase64Async(Jimp.MIME_PNG);
-
-        // Enviar la imagen con la marca de agua
-        res.json({ watermarkedImage });
+        const base64Image = watermarkedImage.toString('base64');
+        res.json({ watermarkedImage: base64Image });
     } catch (error) {
-        console.error('Error al agregar marca de agua:', error);
+        console.error('Error al agregar la marca de agua:', error);
         res.status(500).send('Error al procesar la imagen');
     }
 });
 
+
 const registerWithRegistry = async () => {
-    const registryUrl = 'http://localhost:5000/register'; 
+    const registryUrl = 'http://localhost:5000/register';
     const serverUrl = `http://localhost:${port}`;
 
     try {
@@ -56,5 +64,5 @@ const registerWithRegistry = async () => {
 
 app.listen(port, () => {
     console.log(`Instancia ejecutándose en el puerto ${port}`);
-    registerWithRegistry(); 
+    registerWithRegistry();
 });
