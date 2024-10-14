@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     refreshButton.addEventListener('click', fetchServerData);
 
     function fetchServerData() {
-        fetch('http://localhost:5001/monitor')
+        fetch('http://localhost:5000/health-status') 
             .then(response => response.json())
             .then(data => {
                 serverData.innerHTML = ''; 
