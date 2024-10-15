@@ -32,9 +32,29 @@ socket.on('updateServers', (updatedServers) => {
   console.log("Servidores actualizados vía WebSockets:", servers, serverHealth);
 });
 
+const logAction = (req, res, server, status) => {
+  const logEntry = `${req.ip} - - [${new Date().toISOString()}] "${req.method} ${req.originalUrl} ${req.protocol.toUpperCase()}/${req.httpVersion}" ${status} ${res.get('Content-Length') || 0} "-" "${req.get('User-Agent')}"`;
+  const logObject = {
+    remote_addr: req.ip,
+    time: Math.floor(new Date().getTime() / 1000).toString(),
+    method: req.method,
+    path: req.originalUrl,
+    version: `${req.protocol.toUpperCase()}/${req.httpVersion}`,
+    response: status.toString(),
+    bytesSent: res.get('Content-Length') || 0,
+    user_agent: req.get('User-Agent')
+  };
+  console.log(logEntry);
+  console.log(JSON.stringify(logObject));
+  socket.emit('logAction', logObject);
+};
+
 const balanceLoad = async (req, res) => {
-  if (servers.length === 0) {
-    return res.status(503).send("No hay servidores disponibles");
+  if (servers.length == 0) {
+    const status = 503;
+    res.status(status).send("No hay servidores disponibles");
+    logAction(req, res, "N/A", status);
+    return;
   }
 
   let attempts = 0;
@@ -42,7 +62,7 @@ const balanceLoad = async (req, res) => {
     let server = servers[currentIndex];
     currentIndex = (currentIndex + 1) % servers.length;
     attempts++;
-    if (serverHealth.get(server) === 'UP') {
+    if (serverHealth.get(server) == 'UP') {
       try {
         const formData = new FormData();
         formData.append('image', req.file.buffer, req.file.originalname);
@@ -54,22 +74,20 @@ const balanceLoad = async (req, res) => {
           },
         });
 
-        const logEntry = `${server} - - [${new Date().toISOString()}] "POST /add-watermark" ${response.status} Success`;
-        socket.emit('logAction', logEntry);
-
+        logAction(req, res, server, response.status);
         return res.json(response.data);
       } catch (error) {
         console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);
         
-        const logEntry = `${server} - - [${new Date().toISOString()}] "POST /add-watermark" 500 Error`;
-        socket.emit('logAction', logEntry);
-
+        logAction(req, res, server, 500);
         serverHealth.set(server, 'DOWN'); 
       }
     }
   }
 
-  return res.status(503).send("No hay servidores disponibles");
+  const status = 503;
+  res.status(status).send("No hay servidores disponibles");
+  logAction(req, res, "N/A", status);
 };
 
 socket.on('connect', () => {

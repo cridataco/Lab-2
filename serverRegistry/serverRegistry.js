@@ -3,35 +3,27 @@ const cors = require('cors');
 const axios = require('axios');
 const { Server } = require("socket.io");
 const http = require("http");
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 const port = 5000;
 
 const server = http.createServer(app);
 const io = new Server(server);
-const logFilePath = path.join(__dirname, 'server_logs.txt');
 
 let servers = [];
 let serverHealth = new Map();
+let serverLogs = new Map();
 
 app.use(express.json());
 app.use(cors());
 
-function writeLog(logEntry) {
-  fs.appendFile(logFilePath, logEntry + '\n', (err) => {
-    if (err) {
-      console.error('Error al escribir el log:', err);
-    }
-  });
-}
-
+// Registrar servidor
 app.post('/register', async (req, res) => {
   const { server } = req.body;
   if (!servers.includes(server)) {
     servers.push(server);
     serverHealth.set(server, 'UNKNOWN');
+    serverLogs.set(server, []);
     console.log(`Servidor registrado: ${server}`);
 
     io.emit('updateServers', servers.map(s => ({
@@ -56,19 +48,26 @@ app.post('/register', async (req, res) => {
   }
 });
 
+// Obtener servidores
 app.get('/servers', (req, res) => {
-  res.json(servers);
+  const serversData = servers.map(server => ({
+    server,
+    status: serverHealth.get(server),
+    timestamp: new Date(),
+  }));
+  res.json(serversData);
 });
 
+// Obtener logs
 app.get('/logs', (req, res) => {
-  fs.readFile(logFilePath, 'utf8', (err, data) => {
-    if (err) {
-      return res.status(500).send('Error al leer los logs');
-    }
-    res.send(data);
+  const logs = [];
+  serverLogs.forEach((logEntries, server) => {
+    logEntries.forEach(entry => logs.push(entry));
   });
+  res.json(logs);
 });
 
+// WebSocket
 io.on('connection', (socket) => {
   console.log('Cliente conectado a WebSocket');
 
@@ -86,27 +85,28 @@ io.on('connection', (socket) => {
     try {
       const response = await axios.get(`${server}/health`);
       serverHealth.set(server, 'UP');
-
-      const logEntry = `${server} - - [${new Date().toISOString()}] "GET /health" ${response.status} ${response.statusText}`;
-      writeLog(logEntry);
-
-      io.emit('updateServers', servers.map(s => ({
-        server: s,
-        status: serverHealth.get(s),
-        timestamp: new Date(),
-      })));
     } catch (error) {
       serverHealth.set(server, 'DOWN');
-
-      const logEntry = `${server} - - [${new Date().toISOString()}] "GET /health" 500 Error`;
-      writeLog(logEntry);
-
-      io.emit('updateServers', servers.map(s => ({
-        server: s,
-        status: serverHealth.get(s),
-        timestamp: new Date(),
-      })));
     }
+    
+    io.emit('updateServers', servers.map(s => ({
+      server: s,
+      status: serverHealth.get(s),
+      timestamp: new Date(),
+    })));
+  });
+
+  socket.on('logAction', (logObject) => {
+    const server = logObject.remote_addr;
+    const logEntry = `${server} - - [${new Date(logObject.time * 1000).toISOString()}] "${logObject.method} ${logObject.path} ${logObject.version}" ${logObject.response} ${logObject.bytesSent} "-" "${logObject.user_agent}"`;
+    
+    if (serverLogs.has(server)) {
+      serverLogs.get(server).push(logObject);
+    } else {
+      serverLogs.set(server, [logObject]);
+    }
+
+    io.emit('logUpdate', logEntry);
   });
 });
 
