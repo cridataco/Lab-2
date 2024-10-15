@@ -1,4 +1,6 @@
 const express = require('express');
+const { exec } = require('child_process');
+const os = require('os');
 const bodyParser = require('body-parser');
 const sharp = require('sharp');
 const axios = require('axios');
@@ -50,21 +52,36 @@ app.post('/add-watermark', upload.single('image'), async (req, res) => {
     }
 });
 
-app.get('/shutdown', (req, res) => {
-    exec('sh /path/to/kill_container.sh', (err, stdout, stderr) => {
-        if (err) {
-            console.error(`Error al ejecutar el script: ${stderr}`);
-            res.status(500).send('Error al apagar el contenedor');
-            return;
+function getContainerIP() {
+    const networkInterfaces = os.networkInterfaces();
+    for (const interfaceName in networkInterfaces) {
+        const interfaces = networkInterfaces[interfaceName];
+        for (const iface of interfaces) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
         }
-        console.log(`Salida: ${stdout}`);
+    }
+}
+
+app.get('/shutdown', async (req, res) => {
+    const containerName = 'instancia2';
+
+    console.log('Intentando apagar el contenedor a través de la API Docker');
+
+    try {
+        const response = await axios.post(`http://172.22.144.1:2375/containers/${containerName}/stop`);
+        console.log(`Contenedor detenido: ${response.data}`);
         res.send('El contenedor se apagará.');
-    });
+    } catch (error) {
+        console.error(`Error al detener el contenedor: ${error.message}`);
+        res.status(500).send('Error al apagar el contenedor');
+    }
 });
 
 const registerWithRegistry = async () => {
-    const registryUrl = 'http://localhost:5000/register';
-    const serverUrl = `http://localhost:${port}`;
+    const registryUrl = 'http://172.22.144.1:5000/register';
+    const serverUrl = `http://172.22.144.1:${port}`;
 
     try {
         await axios.post(registryUrl, { server: serverUrl });

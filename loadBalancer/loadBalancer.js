@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
@@ -24,6 +25,87 @@ const socket = io("http://localhost:5000", {
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
+});
+
+const { NodeSSH } = require('node-ssh');
+const ssh = new NodeSSH();
+const serversRegisters = [
+  {
+    ip: process.env.SERVER_1_IP,
+    port: process.env.SERVER_1_PORT,
+    user: process.env.SERVER_1_USER,
+    serverName: process.env.SERVER_1_INSTANS_NAME
+  },
+];
+
+// Función para seleccionar un servidor aleatorio
+function getRandomServer() {
+  const randomIndex = Math.floor(Math.random() * serversRegisters.length);
+  return serversRegisters[randomIndex];
+}
+
+async function installDependencies(ssh) {
+  const installDocker = `
+    if ! command -v docker &> /dev/null; then
+      echo "Docker no está instalado. Instalando Docker..."
+      sudo apt-get update
+      sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+      sudo apt-get update
+      sudo apt-get install -y docker-ce
+    else
+      echo "Docker ya está instalado."
+    fi
+  `;
+  const installGit = `
+    if ! command -v git &> /dev/null; then
+      echo "Git no está instalado. Instalando Git..."
+      sudo apt-get update
+      sudo apt-get install -y git
+    else
+      echo "Git ya está instalado."
+    fi
+  `;
+
+  await ssh.execCommand(installDocker);
+  await ssh.execCommand(installGit);
+}
+
+app.post('/deploy', async (req, res) => {
+  console.log('xd')
+  const randomServer = getRandomServer();
+  console.log(randomServer);
+
+  try {
+    await ssh.connect({
+      host: randomServer.ip,
+      port: randomServer.port,
+      username: randomServer.user,
+    });
+    console.log(`Conectado al servidor: ${randomServer.ip}`);
+    
+    await installDependencies(ssh);
+    console.log(`1`);
+    
+    const repoUrl = 'https://github.com/cridataco/Lab-2';
+    const dockerCommand = `docker run -it -p ${randomServer.port}:${randomServer.port} --name ${randomServer.serverName} -e PORT=${randomServer.port} instancia1`;
+    
+    const result = await ssh.execCommand(`git clone ${repoUrl} && ${dockerCommand}`, { cwd: '/home/usuario/' });
+    console.log(`2`);
+
+    if (result.stderr) {
+      throw new Error(`Error al ejecutar el comando: ${result.stderr}`);
+    }
+
+    console.log('Repositorio clonado y Docker levantado:', result.stdout);
+    res.json({ success: true, message: 'Instancia desplegada correctamente.' });
+  } catch (err) {
+    console.error('Error en la conexión o comando:', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    ssh.dispose(); // Cerrar la conexión SSH
+  }
 });
 
 socket.on('updateServers', (updatedServers) => {
@@ -99,6 +181,7 @@ socket.on('disconnect', () => {
 });
 
 const tumbarContenedor = async (server) => {
+  console.log(`Intentando tumbar el contenedor en ${server}`);
   try {
     console.log(`Intentando tumbar el contenedor en ${server}`);
     const response = await axios.get(`${server}/shutdown`);
@@ -111,15 +194,14 @@ const tumbarContenedor = async (server) => {
 app.post('/api/add-watermark', upload.single('image'), balanceLoad);
 
 app.post('/api/chaos', async (req, res) => {
+  console.log(`Intentando tumbar el contenedor generic`);
   if (servers.length === 0) {
     return res.status(503).send("No hay servidores disponibles para caer.");
   }
 
-  // Seleccionar una instancia al azar
   const randomIndex = Math.floor(Math.random() * servers.length);
   const randomServer = servers[randomIndex];
 
-  // Tumbar esa instancia
   await tumbarContenedor(randomServer);
 
   res.json({ message: `Instancia en ${randomServer} fue tumbada.` });
@@ -128,5 +210,7 @@ app.post('/api/chaos', async (req, res) => {
 app.post('/api/kill-container', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
+  console.log(serversRegisters);
+  console.log(process.env.SERVER_1_IP);
   console.log(`Balanceador de carga ejecutándose en el puerto ${port}`);
 });

@@ -1,10 +1,36 @@
 document.addEventListener('DOMContentLoaded', function () {
     const submitButton = document.getElementById('submitButton');
     const killContainerButton = document.getElementById('killContainerButton');
+    const upContainerButton = document.getElementById('upContainerButton');
     const imageInput = document.getElementById('imageInput');
     const watermarkText = document.getElementById('watermarkText');
 
+    upContainerButton.addEventListener('click', async () => {
+      console.log("Levantando contenedor...");
+  
+      try {
+        const response = await fetch('http://localhost:5001/deploy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+  
+        const result = await response.json();
+  
+        if (result.success) {
+          alert(result.message);
+        } else {
+          throw new Error(result.message);
+        }
+      } catch (error) {
+        console.error('Error al desplegar el contenedor:', error);
+        alert('Error al desplegar el contenedor: ' + error.message);
+      }
+    });
+
     killContainerButton.addEventListener('click', async () => {
+        console.log("Tumbar instancia");
         try {
             const response = await fetch('http://localhost:5001/api/chaos', {
                 method: 'POST',
@@ -25,9 +51,6 @@ document.addEventListener('DOMContentLoaded', function () {
             alert(`Error al tumbar la instancia: ${error.message}`);
         }
     });
-
-
-
     
     submitButton.addEventListener('click', async () => {
         const file = imageInput.files[0];
