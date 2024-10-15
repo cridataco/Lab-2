@@ -3,12 +3,15 @@ const cors = require('cors');
 const axios = require('axios');
 const { Server } = require("socket.io");
 const http = require("http");
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const port = 5000;
 
 const server = http.createServer(app);
 const io = new Server(server);
+const logFilePath = path.join(__dirname, 'server_logs.txt');
 
 let servers = [];
 let serverHealth = new Map();
@@ -16,14 +19,38 @@ let serverHealth = new Map();
 app.use(express.json());
 app.use(cors());
 
-app.post('/register', (req, res) => {
+function writeLog(logEntry) {
+  fs.appendFile(logFilePath, logEntry + '\n', (err) => {
+    if (err) {
+      console.error('Error al escribir el log:', err);
+    }
+  });
+}
+
+app.post('/register', async (req, res) => {
   const { server } = req.body;
   if (!servers.includes(server)) {
     servers.push(server);
-    serverHealth.set(server, 'UNKNOWN'); 
+    serverHealth.set(server, 'UNKNOWN');
     console.log(`Servidor registrado: ${server}`);
 
-    io.emit('updateServers', servers);
+    // Emitir la lista de servidores actualizada a todos los clientes conectados
+    io.emit('updateServers', servers.map(s => ({
+      server: s,
+      status: serverHealth.get(s),
+      timestamp: new Date(),
+    })));
+
+    // Realizar chequeo de salud inicial
+    try {
+      const response = await axios.get(`${server}/health`);
+      serverHealth.set(server, 'UP');
+      console.log(`Servidor ${server} está UP`);
+    } catch (error) {
+      serverHealth.set(server, 'DOWN');
+      console.log(`Servidor ${server} está DOWN`);
+    }
+
     res.sendStatus(200);
   } else {
     console.log(`El servidor ya está registrado: ${server}`);
@@ -35,33 +62,54 @@ app.get('/servers', (req, res) => {
   res.json(servers);
 });
 
-const performHealthCheck = async () => {
-  for (const server of servers) {
-    try {
-      await axios.get(`${server}/health`); 
-      serverHealth.set(server, 'UP'); 
-    } catch (error) {
-      console.error(`Error en health check de ${server}:`, error.message);
-      serverHealth.set(server, 'DOWN');
+app.get('/logs', (req, res) => {
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
+    if (err) {
+      return res.status(500).send('Error al leer los logs');
     }
-  }
+    res.send(data);
+  });
+});
 
-  io.emit('updateServers', servers.map(s => ({
+io.on('connection', (socket) => {
+  console.log('Cliente conectado a WebSocket');
+
+  socket.emit('updateServers', servers.map(s => ({
     server: s,
     status: serverHealth.get(s),
     timestamp: new Date(),
   })));
-};
 
-setInterval(performHealthCheck, 5000);
+  socket.on('disconnect', () => {
+    console.log('Cliente desconectado de WebSocket');
+  });
 
-app.get('/health-status', (req, res) => {
-  const serverStatuses = servers.map(server => ({
-    server,
-    status: serverHealth.get(server) || 'UNKNOWN',
-    timestamp: new Date(),
-  }));
-  res.json(serverStatuses);
+  socket.on('healthCheck', async (server) => {
+    try {
+      const response = await axios.get(`${server}/health`);
+      serverHealth.set(server, 'UP');
+
+      const logEntry = `${server} - - [${new Date().toISOString()}] "GET /health" ${response.status} ${response.statusText}`;
+      writeLog(logEntry);
+
+      io.emit('updateServers', servers.map(s => ({
+        server: s,
+        status: serverHealth.get(s),
+        timestamp: new Date(),
+      })));
+    } catch (error) {
+      serverHealth.set(server, 'DOWN');
+
+      const logEntry = `${server} - - [${new Date().toISOString()}] "GET /health" 500 Error`;
+      writeLog(logEntry);
+
+      io.emit('updateServers', servers.map(s => ({
+        server: s,
+        status: serverHealth.get(s),
+        timestamp: new Date(),
+      })));
+    }
+  });
 });
 
 server.listen(port, () => {

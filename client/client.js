@@ -15,13 +15,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const formData = new FormData();
         formData.append('image', file);  
         formData.append('watermarkText', text);  
-
+        console.log("intento de img");
         try {
+            
             const response = await fetch('http://localhost:5001/api/add-watermark', {
                 method: 'POST',
                 body: formData,
             });
-
+            
             if (!response.ok) {
                 throw new Error(`Error en la solicitud: ${response.statusText}`);
             }

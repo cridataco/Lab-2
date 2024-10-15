@@ -20,7 +20,11 @@ let servers = [];
 let serverHealth = new Map();
 let currentIndex = 0;
 
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:5000", {
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+});
 
 socket.on('updateServers', (updatedServers) => {
   servers = updatedServers.map(s => s.server);
@@ -33,30 +37,48 @@ const balanceLoad = async (req, res) => {
     return res.status(503).send("No hay servidores disponibles");
   }
 
-  let server = servers[currentIndex];
-  currentIndex = (currentIndex + 1) % servers.length;
+  let attempts = 0;
+  while (attempts < servers.length) {
+    let server = servers[currentIndex];
+    currentIndex = (currentIndex + 1) % servers.length;
+    attempts++;
+    if (serverHealth.get(server) == 'UP') {
+      try {
+        const formData = new FormData();
+        formData.append('image', req.file.buffer, req.file.originalname);
+        formData.append('watermarkText', req.body.watermarkText);
 
-  if (serverHealth.get(server) !== 'UP') {
-    return res.status(503).send(`Servidor ${server} no disponible`);
+        const response = await axios.post(`${server}/add-watermark`, formData, {
+          headers: {
+            ...formData.getHeaders(),
+          },
+        });
+
+        const logEntry = `${server} - - [${new Date().toISOString()}] "POST /add-watermark" ${response.status} Success`;
+        socket.emit('logAction', logEntry);
+
+        return res.json(response.data);
+      } catch (error) {
+        console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);
+        
+        const logEntry = `${server} - - [${new Date().toISOString()}] "POST /add-watermark" 500 Error`;
+        socket.emit('logAction', logEntry);
+
+        serverHealth.set(server, 'DOWN'); 
+      }
+    }
   }
 
-  try {
-    const formData = new FormData();
-    formData.append('image', req.file.buffer, req.file.originalname);
-    formData.append('watermarkText', req.body.watermarkText); 
-
-    const response = await axios.post(`${server}/add-watermark`, formData, {
-      headers: {
-        ...formData.getHeaders(),
-      },
-    });
-
-    return res.json(response.data);
-  } catch (error) {
-    console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);
-    return res.status(500).send(`Error en el servidor ${server}`);
-  }
+  return res.status(503).send("No hay servidores disponibles");
 };
+
+socket.on('connect', () => {
+  console.log('Conectado al Server Registry vía WebSocket');
+});
+
+socket.on('disconnect', () => {
+  console.log('Desconectado del Server Registry');
+});
 
 app.post('/api/add-watermark', upload.single('image'), balanceLoad);
 

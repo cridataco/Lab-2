@@ -1,45 +1,49 @@
 document.addEventListener('DOMContentLoaded', function() {
     const refreshButton = document.getElementById('refreshButton');
     const serverData = document.getElementById('serverData');
+    const logData = document.getElementById('logData'); // Nueva sección para logs
+
     refreshButton.addEventListener('click', fetchServerData);
+    fetchLogs(); // Llamar a la función para obtener los logs cuando la página cargue
 
     function fetchServerData() {
-        fetch('http://localhost:5000/health-status') 
+        fetch('http://localhost:5000/health-status')
             .then(response => response.json())
             .then(data => {
-                serverData.innerHTML = ''; 
-
+                serverData.innerHTML = '';
                 data.forEach(instance => {
                     const instanceDiv = document.createElement('div');
                     instanceDiv.classList.add('instance');
-
                     const instanceTitle = document.createElement('h2');
                     instanceTitle.textContent = `Instance: ${instance.server} - Status: ${instance.status}`;
                     instanceDiv.appendChild(instanceTitle);
-
                     const status = document.createElement('p');
                     status.textContent = `Last Checked: ${new Date(instance.timestamp).toLocaleTimeString()}`;
                     instanceDiv.appendChild(status);
-
                     const chartCanvas = document.createElement('canvas');
                     chartCanvas.id = `chart-${instance.server}`;
                     instanceDiv.appendChild(chartCanvas);
-
                     serverData.appendChild(instanceDiv);
-
                     createChart([instance], `chart-${instance.server}`);
                 });
             })
             .catch(error => console.error('Error fetching instance data:', error));
     }
 
+    function fetchLogs() {
+        fetch('http://localhost:5000/logs')
+            .then(response => response.text())
+            .then(logs => {
+                logData.innerHTML = `<pre>${logs}</pre>`;
+            })
+            .catch(error => console.error('Error fetching logs:', error));
+    }
+
     function createChart(logs, chartId) {
         const canvas = document.getElementById(chartId);
         const ctx = canvas.getContext('2d');
-
         const labels = logs.map(log => new Date(log.timestamp).toLocaleTimeString());
         const statuses = logs.map(log => log.status === 'UP' ? 1 : 0);
-
         new Chart(ctx, {
             type: 'line',
             data: {
