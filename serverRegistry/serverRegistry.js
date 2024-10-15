@@ -34,14 +34,12 @@ app.post('/register', async (req, res) => {
     serverHealth.set(server, 'UNKNOWN');
     console.log(`Servidor registrado: ${server}`);
 
-    // Emitir la lista de servidores actualizada a todos los clientes conectados
     io.emit('updateServers', servers.map(s => ({
       server: s,
       status: serverHealth.get(s),
       timestamp: new Date(),
     })));
 
-    // Realizar chequeo de salud inicial
     try {
       const response = await axios.get(`${server}/health`);
       serverHealth.set(server, 'UP');

@@ -1,10 +1,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     const refreshButton = document.getElementById('refreshButton');
     const serverData = document.getElementById('serverData');
-    const logData = document.getElementById('logData'); // Nueva sección para logs
+    const logData = document.getElementById('logData');
 
     refreshButton.addEventListener('click', fetchServerData);
-    fetchLogs(); // Llamar a la función para obtener los logs cuando la página cargue
+    fetchLogs(); 
 
     function fetchServerData() {
         fetch('http://localhost:5000/health-status')

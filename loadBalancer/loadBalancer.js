@@ -42,7 +42,7 @@ const balanceLoad = async (req, res) => {
     let server = servers[currentIndex];
     currentIndex = (currentIndex + 1) % servers.length;
     attempts++;
-    if (serverHealth.get(server) == 'UP') {
+    if (serverHealth.get(server) === 'UP') {
       try {
         const formData = new FormData();
         formData.append('image', req.file.buffer, req.file.originalname);
