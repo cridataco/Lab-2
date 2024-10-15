@@ -3,7 +3,10 @@ FROM node:18
 WORKDIR /app
 
 COPY package*.json ./
+
 COPY .env ./
+
+COPY kill_container.sh ./
 
 RUN npm install
 

@@ -98,7 +98,34 @@ socket.on('disconnect', () => {
   console.log('Desconectado del Server Registry');
 });
 
+const tumbarContenedor = async (server) => {
+  try {
+    console.log(`Intentando tumbar el contenedor en ${server}`);
+    const response = await axios.get(`${server}/shutdown`);
+    console.log(`Contenedor en ${server} apagado correctamente:`, response.data);
+  } catch (error) {
+    console.error(`Error al intentar tumbar el contenedor en ${server}:`, error.message);
+  }
+};
+
 app.post('/api/add-watermark', upload.single('image'), balanceLoad);
+
+app.post('/api/chaos', async (req, res) => {
+  if (servers.length === 0) {
+    return res.status(503).send("No hay servidores disponibles para caer.");
+  }
+
+  // Seleccionar una instancia al azar
+  const randomIndex = Math.floor(Math.random() * servers.length);
+  const randomServer = servers[randomIndex];
+
+  // Tumbar esa instancia
+  await tumbarContenedor(randomServer);
+
+  res.json({ message: `Instancia en ${randomServer} fue tumbada.` });
+});
+
+app.post('/api/kill-container', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
   console.log(`Balanceador de carga ejecutándose en el puerto ${port}`);

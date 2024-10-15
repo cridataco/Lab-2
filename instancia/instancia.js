@@ -5,6 +5,7 @@ const axios = require('axios');
 const cors = require('cors');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+require("dotenv").config({ path: "/.env" });
 
 const app = express();
 const port = process.env.PORT || 9201;
@@ -49,6 +50,17 @@ app.post('/add-watermark', upload.single('image'), async (req, res) => {
     }
 });
 
+app.get('/shutdown', (req, res) => {
+    exec('sh /path/to/kill_container.sh', (err, stdout, stderr) => {
+        if (err) {
+            console.error(`Error al ejecutar el script: ${stderr}`);
+            res.status(500).send('Error al apagar el contenedor');
+            return;
+        }
+        console.log(`Salida: ${stdout}`);
+        res.send('El contenedor se apagará.');
+    });
+});
 
 const registerWithRegistry = async () => {
     const registryUrl = 'http://localhost:5000/register';

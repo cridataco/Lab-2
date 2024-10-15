@@ -5,7 +5,7 @@ const http = require("http");
 const axios = require("axios");
 
 const app = express();
-const port = process.env.MONITORPORT || 3000;
+const port = process.env.MONITORPORT || 8000;
 
 const server = http.createServer(app);
 const io = new Server(server);

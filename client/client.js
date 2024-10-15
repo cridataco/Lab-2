@@ -1,7 +1,33 @@
 document.addEventListener('DOMContentLoaded', function () {
     const submitButton = document.getElementById('submitButton');
+    const killContainerButton = document.getElementById('killContainerButton');
     const imageInput = document.getElementById('imageInput');
     const watermarkText = document.getElementById('watermarkText');
+
+    killContainerButton.addEventListener('click', async () => {
+        try {
+            const response = await fetch('http://localhost:5001/api/chaos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error en la solicitud: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log("Instancia caída:", data.message);
+            alert(`Instancia caída: ${data.message}`);
+        } catch (error) {
+            console.error("Error al tumbar la instancia:", error);
+            alert(`Error al tumbar la instancia: ${error.message}`);
+        }
+    });
+
+
+
     
     submitButton.addEventListener('click', async () => {
         const file = imageInput.files[0];
