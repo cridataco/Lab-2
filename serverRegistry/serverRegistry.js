@@ -54,14 +54,20 @@ const logAction = (req, res, server, status) => {
 };
 
 const performHealthCheck = async (server) => {
+  if (serverHealth.get(server) === 'RESTART') {
+    io.emit('healthCheck', { server, status: 'RESTART' });
+    return 'RESTART';
+  }
     try {
         const response = await axios.get(`${server}/health`);
         serverHealth.set(server, 'UP');
         io.emit('healthCheck', { server, status: 'UP' });
-    } catch (error) {
+        return 'UP';
+      } catch (error) {
         serverHealth.set(server, 'DOWN');
         io.emit('healthCheck', { server, status: 'DOWN' });
-    }
+        return 'DOWN';
+      }
 };
 
 app.post('/register', async (req, res) => {
@@ -71,13 +77,6 @@ app.post('/register', async (req, res) => {
         serverHealth.set(server, 'UNKNOWN');
         serverLogs.set(server, []);
         console.log(`Servidor registrado: ${server}`);
-
-        io.emit('updateServers', servers.map(s => ({
-            server: s,
-            status: serverHealth.get(s),
-            timestamp: new Date(),
-        })));
-
         try {
       const response = await axios.get(`${server}/health`);
       serverHealth.set(server, 'UP');
@@ -85,6 +84,12 @@ app.post('/register', async (req, res) => {
     } catch (error) {
       serverHealth.set(server, 'DOWN');
       console.log(`Servidor ${server} está DOWN`);
+    } finally {
+      io.emit('updateServers', servers.map(s => ({
+        server: s,
+        status: serverHealth.get(s),
+        timestamp: new Date(),
+      })));
     }
 
         res.sendStatus(200);
@@ -153,6 +158,28 @@ io.on('connection', (socket) => {
     io.emit('logUpdate', logEntry);
   });
 });
+
+setInterval(async () => {
+  servers.forEach(async (server) => {
+    await performHealthCheck(server)
+  });
+  const mapObject = Object.fromEntries(serverHealth);
+
+  axios.post('http://localhost:5001/health-check', mapObject)
+    .then((response) => {
+        console.log(response.data);
+    })
+    .catch((error) => {
+        console.error(error);
+  });
+  servers.forEach(async (server) => {
+   if ((await performHealthCheck(server)) === 'DOWN') {
+    serverHealth.set(server, 'RESTART');
+   }
+  });
+}, 10000);
+
+
 
 server.listen(port, () => {
     console.log(`Server Registry ejecutándose en el puerto ${port}`);

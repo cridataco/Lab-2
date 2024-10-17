@@ -118,64 +118,12 @@ app.post('/deploy', async (req, res) => {
   });
 });
 
-
-app.post('/kill', async (req, res) => {
-  const randomServer = getRandomServer();
-  const randomInstacia = getRandomInstancia();
-  // const randomPort = getRandomPort();
-  // const dockerCommand = `docker rm -f CONTAINER_NAME`;
-  // const conn = new Client();
-  // conn.on('ready', () => {
-  //   console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${dockerCommand}`);
-  //   conn.exec(dockerCommand, { pty: true }, (err, stream) => {
-  //     if (err) {
-  //         console.error(`Error al ejecutar el comando Docker: ${err.message}`);
-  //         return res.status(500).json({ message: 'Error al ejecutar el comando Docker', error: err.message });
-  //     }
-  //     let output = '';
-  //     let errorOutput = '';
-  //     stream.on('data', (data) => {
-  //         output += data.toString();
-  //     });
-  //     stream.stderr.on('data', (data) => {
-  //         errorOutput += data.toString();
-  //     });
-  //     stream.on('close', (code, signal) => {
-  //         conn.end();
-  
-  //         if (code === 0) {
-  //             console.log(`Comando Docker ejecutado con éxito: ${output}`);
-  //             res.status(200).json({ message: 'Instancia de Docker desplegada con éxito', output });
-  //         } else {
-  //             console.error(`El comando Docker falló con código: ${code}, señal: ${signal}`);
-  //             res.status(500).json({ message: 'Error al desplegar la instancia de Docker', error: errorOutput });
-  //         }
-  //     });
-  // });
-  // }).on('error', (err) => {
-  //   console.error(`Error de conexión SSH: ${err.message}`);
-  //   res.status(500).json({ message: 'Error de conexión SSH', error: err.message });
-  // }).connect({
-  //   host: randomServer.ip,
-  //   port: 22,
-  //   username: randomServer.user,
-  //   password: randomServer.password
-  // });
-});
-
 function getRandomInstancia() {
-  // Filtrar servidores que están "UP"
   const activeServers = Array.from(serverHealth.entries()).filter(([server, status]) => status === 'UP');
-
-  // Verificar si hay servidores activos disponibles
   if (activeServers.length === 0) {
       throw new Error('No hay servidores disponibles que estén "UP".');
   }
-
-  // Seleccionar un índice aleatorio
   const randomIndex = Math.floor(Math.random() * activeServers.length);
-
-  // Retornar el servidor y su estado correspondiente
   return activeServers[randomIndex];
 }
 
@@ -245,6 +193,65 @@ const balanceLoad = async (req, res) => {
   logAction(req, res, "N/A", status);
 };
 
+app.post('/health-check', (req, res) => {
+  const receivedMap = new Map(Object.entries(req.body));
+  const responses = [];
+
+  receivedMap.forEach((value, key) => {
+      const direction = key;
+      const status = value;
+      console.log(direction, status);
+
+      if (status === 'DOWN') {
+          const ip = direction.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)[0];
+          const server = serversRegisters.find((server) => server.ip === ip);
+          const hostIp = getWifiIP();
+          const randomPort = getRandomPort();
+          const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name ${randomPort} -e PORT=${randomPort} -e HOST_IP=${hostIp} -e LOCAL_IP=${ip} imagen`;
+          const conn = new Client();
+
+          conn.on('ready', () => {
+              console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${dockerCommand}`);
+              conn.exec(dockerCommand, { pty: true }, (err, stream) => {
+                  if (err) {
+                      responses.push({ message: `Error al ejecutar el comando Docker para ${ip}`, error: err.message });
+                      return;
+                  }
+                  let output = '';
+                  let errorOutput = '';
+                  stream.on('data', (data) => {
+                      output += data.toString();
+                  });
+                  stream.stderr.on('data', (data) => {
+                      errorOutput += data.toString();
+                  });
+                  stream.on('close', (code, signal) => {
+                      conn.end();
+                      if (code === 0) {
+                          console.log(`Comando Docker ejecutado con éxito: ${output}`);
+                          responses.push({ message: `Instancia de Docker desplegada con éxito para ${ip}`, output });
+                      } else {
+                          console.error(`El comando Docker falló con código: ${code}, señal: ${signal}`);
+                          responses.push({ message: `Error al desplegar la instancia de Docker para ${ip}`, error: errorOutput });
+                      }
+                  });
+              });
+          }).on('error', (err) => {
+              console.error(`Error de conexión SSH: ${err.message}`);
+              responses.push({ message: `Error de conexión SSH para ${ip}`, error: err.message });
+          }).connect({
+              host: server.ip,
+              port: 22,
+              username: server.user,
+              password: server.password
+          });
+      }
+  });
+
+  // Una vez que el forEach termina, envía la respuesta final
+  res.status(200).json({ message: 'Proceso completado', results: responses });
+});
+
 socket.on('updateServers', (updatedServers) => {
   servers = updatedServers.map(s => s.server);
   serverHealth = new Map(updatedServers.map(s => [s.server, s.status]));
@@ -272,21 +279,62 @@ console.log(`Intentando tumbar el contenedor en ${server}`);
 
 app.post('/api/add-watermark', upload.single('image'), balanceLoad);
 
-app.post('/api/chaos', async (req, res) => {
-  console.log(`Intentando tumbar el contenedor generic`);
+app.post('/api/chaos', (req, res) => {
   if (servers.length === 0) {
     return res.status(503).send("No hay servidores disponibles para caer.");
   }
 
-  const randomIndex = Math.floor(Math.random() * servers.length);
-  const randomServer = servers[randomIndex];
+  const random = getRandomInstancia();
+  const ip = random[0].match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)[0];
+  const server = serversRegisters.find((server) => server.ip === ip);
+  const port = random[0].split(':')[2];
+  const dockerCommand = `docker rm -f ${port}`;
 
-  await tumbarContenedor(randomServer);
+  const conn = new Client();
+  
+  conn.on('ready', () => {
+    console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${port}`);
+    
+    conn.exec(dockerCommand, { pty: true }, (err, stream) => {
+      if (err) {
+        console.error(`Error al ejecutar el comando Docker: ${err.message}`);
+        return res.status(500).json({ message: 'Error al ejecutar el comando Docker', error: err.message });
+      }
 
-  res.json({ message: `Instancia en ${randomServer} fue tumbada.` });
+      let output = '';
+      let errorOutput = '';
+
+      stream.on('data', (data) => {
+        output += data.toString();
+      });
+
+      stream.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      stream.on('close', (code, signal) => {
+        conn.end();
+
+        if (code === 0) {
+          console.log(`Comando Docker ejecutado con éxito: ${output}`);
+          res.status(200).json({ message: 'Instancia de Docker desplegada con éxito', output });
+        } else {
+          console.error(`El comando Docker falló con código: ${code}, señal: ${signal}`);
+          res.status(500).json({ message: 'Error al ejecutar el comando Docker', error: errorOutput });
+        }
+      });
+    });
+  }).on('error', (err) => {
+    console.error(`Error de conexión SSH: ${err.message}`);
+    res.status(500).json({ message: 'Error de conexión SSH', error: err.message });
+  }).connect({
+    host: server.ip,
+    port: 22,
+    username: server.user,
+    password: server.password
+  });
 });
 
-app.post('/api/kill-container', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
 console.log(serversRegisters);
