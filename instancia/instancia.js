@@ -12,6 +12,7 @@ require("dotenv").config({ path: "/.env" });
 const app = express();
 const port = process.env.PORT || 9201;
 const hostIp = process.env.HOST_IP || '192.168.1.14';
+const localIp = process.env.LOCAL_IP || '192.168.1.14';
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -82,28 +83,10 @@ app.get('/shutdown', async (req, res) => {
     }
 });
 
-function getWifiIP() {
-  const networkInterfaces = os.networkInterfaces();
-  let wifiInterfaceNames = ['Wi-Fi', 'WLAN', 'wlan0', 'en0'];
-  let wifiIP = null;
-
-  for (let iface of wifiInterfaceNames) {
-    if (networkInterfaces[iface]) {
-      networkInterfaces[iface].forEach((ifaceDetails) => {
-        if (ifaceDetails.family === 'IPv4' && !ifaceDetails.internal) {
-          wifiIP = ifaceDetails.address;
-        }
-      });
-    }
-  }
-
-  return wifiIP ? wifiIP : 'WiFi interface not found or not connected';
-}
 
 const registerWithRegistry = async () => {
-  const ipAddresses = getWifiIP();
     const registryUrl = `http://${hostIp}:5000/register`;
-    const serverUrl = `http://${ipAddresses}:${port}`;
+    const serverUrl = `http://${localIp}:${port}`;
 
     try {
         await axios.post(registryUrl, { server: serverUrl });

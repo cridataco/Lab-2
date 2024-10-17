@@ -78,7 +78,7 @@ app.post('/deploy', async (req, res) => {
   const hostIp = getWifiIP();
   const randomServer = getRandomServer();
   const randomPort = getRandomPort();
-  const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name ${randomPort} -e PORT=${randomPort} -e HOST_IP=${hostIp} imagen`;
+  const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name ${randomPort} -e PORT=${randomPort} -e HOST_IP=${hostIp} -e LOCAL_IP=${randomServer.ip} imagen`;
   const conn = new Client();
   conn.on('ready', () => {
     console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${dockerCommand}`);
