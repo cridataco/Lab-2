@@ -1,10 +1,9 @@
-const socket = io("http://localhost:8000");
+const socket = io("http://localhost:8000"); // Ajusta al puerto correcto del servidor
 
 const serverStatusContainer = document.getElementById('serverStatusContainer');
 const charts = {};
 const traceTables = {};
 const logTables = {};
-const logCharts = {};
 
 socket.on('connect', () => {
     console.log('Connected to WebSocket server');
@@ -58,7 +57,6 @@ function updateServerStatus(servers) {
                 <tbody>
                 </tbody>
             </table>
-            <canvas id="log-chart-${server.server.replace(/\W/g, '_')}" width="400" height="200"></canvas>
         `;
         serverStatusContainer.appendChild(serverElement);
 
@@ -77,10 +75,6 @@ function updateServerStatus(servers) {
         if (!logTables[server.server]) {
             createLogTable([], `logs-${server.server.replace(/\W/g, '_')}`);
         }
-
-        if (!logCharts[server.server]) {
-            createLogChart([], `log-chart-${server.server.replace(/\W/g, '_')}`);
-        }
     });
 }
 
@@ -88,9 +82,6 @@ function updateServerLogs(logs) {
     logs.forEach(log => {
         if (logTables[log.server]) {
             updateLogTable(logTables[log.server], log);
-        }
-        if (logCharts[log.server]) {
-            updateLogChart(logCharts[log.server], log);
         }
     });
 }
@@ -165,85 +156,26 @@ function createLogTable(logs, tableId) {
         const cellResponse = row.insertCell(3);
         const cellUserAgent = row.insertCell(4);
 
-        cellTime.textContent = new Date(log.time * 1000).toLocaleTimeString();
+        cellTime.textContent = log.time;
         cellMethod.textContent = log.method;
         cellPath.textContent = log.path;
         cellResponse.textContent = log.response;
-        cellUserAgent.textContent = log.user_agent;
+        cellUserAgent.textContent = log.userAgent;
     });
     logTables[tableId] = tableBody;
 }
 
 function updateLogTable(tableBody, log) {
-    const row = tableBody.insertRow(0);
+    const row = tableBody.insertRow();
     const cellTime = row.insertCell(0);
     const cellMethod = row.insertCell(1);
     const cellPath = row.insertCell(2);
     const cellResponse = row.insertCell(3);
     const cellUserAgent = row.insertCell(4);
 
-    cellTime.textContent = new Date(log.time * 1000).toLocaleTimeString();
+    cellTime.textContent = log.time;
     cellMethod.textContent = log.method;
     cellPath.textContent = log.path;
     cellResponse.textContent = log.response;
-    cellUserAgent.textContent = log.user_agent;
-
-    if (tableBody.rows.length > 50) { 
-        tableBody.deleteRow(tableBody.rows.length - 1);
-    }
+    cellUserAgent.textContent = log.userAgent;
 }
-
-function createLogChart(logs, canvasId) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: logs.map(log => new Date(log.time * 1000).toLocaleTimeString()),
-            datasets: [{
-                label: 'Log Entries',
-                data: logs.map(log => 1),
-                fill: false,
-                borderColor: 'rgb(54, 162, 235)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
-                    }
-                }
-            }
-        }
-    });
-    logCharts[canvasId] = chart;
-}
-
-function updateLogChart(chart, log) {
-    chart.data.labels.push(new Date(log.time * 1000).toLocaleTimeString());
-    chart.data.datasets[0].data.push(1);
-
-    if (chart.data.labels.length > 50) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-    }
-
-    chart.update();
-}
-
-document.getElementById('healthCheckButton').addEventListener('click', () => {
-    socket.emit('performHealthCheck');
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  const healthCheckButton = document.getElementById('healthCheckButton');
-  if (healthCheckButton) {
-      healthCheckButton.addEventListener('click', () => {
-          socket.emit('performHealthCheck');
-      });
-  } else {
-      console.error('Elemento con ID healthCheckButton no encontrado.');
-  }
-});

@@ -4,6 +4,7 @@ const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 const axios = require("axios");
+const { Client } = require('ssh2');  // Asumiendo que 'ssh2' es el módulo correcto
 
 const app = express();
 const port = process.env.MONITORPORT || 8000;
@@ -78,8 +79,7 @@ io.on('connection', (socket) => {
 
   socket.on('performHealthCheck', async () => {
     for (const server of servers) {
-      try { 
-        console.log(server);
+      try {
         const response = await axios.get(`${server}/health`);
         serverHealth.set(server, 'UP');
       } catch (error) {
