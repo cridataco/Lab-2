@@ -126,13 +126,15 @@ const logAction = (req, res, server, status) => {
     bytesSent: res.get('Content-Length') || 0,
     user_agent: req.get('User-Agent')
   };
+
   console.log(logEntry);
   console.log(JSON.stringify(logObject));
   socket.emit('logAction', logObject);
 };
 
+// Función para balancear la carga
 const balanceLoad = async (req, res) => {
-  if (servers.length == 0) {
+  if (servers.length === 0) {
     const status = 503;
     res.status(status).send("No hay servidores disponibles");
     logAction(req, res, "N/A", status);
@@ -144,7 +146,7 @@ const balanceLoad = async (req, res) => {
     let server = servers[currentIndex];
     currentIndex = (currentIndex + 1) % servers.length;
     attempts++;
-    if (serverHealth.get(server) == 'UP') {
+    if (serverHealth.get(server) === 'UP') {
       try {
         const formData = new FormData();
         formData.append('image', req.file.buffer, req.file.originalname);
@@ -162,7 +164,7 @@ const balanceLoad = async (req, res) => {
         console.error(`Error al enviar solicitud al servidor ${server}:`, error.message);
         
         logAction(req, res, server, 500);
-        serverHealth.set(server, 'DOWN'); 
+        serverHealth.set(server, 'DOWN');
       }
     }
   }
@@ -171,6 +173,12 @@ const balanceLoad = async (req, res) => {
   res.status(status).send("No hay servidores disponibles");
   logAction(req, res, "N/A", status);
 };
+
+socket.on('updateServers', (updatedServers) => {
+  servers = updatedServers.map(s => s.server);
+  serverHealth = new Map(updatedServers.map(s => [s.server, s.status]));
+  console.log("Servidores actualizados vía WebSockets:", servers, serverHealth);
+});
 
 socket.on('connect', () => {
   console.log('Conectado al Server Registry vía WebSocket');
@@ -183,7 +191,7 @@ socket.on('disconnect', () => {
 const tumbarContenedor = async (server) => {
   console.log(`Intentando tumbar el contenedor en ${server}`);
   try {
-    console.log(`Intentando tumbar el contenedor en ${server}`);
+console.log(`Intentando tumbar el contenedor en ${server}`);
     const response = await axios.get(`${server}/shutdown`);
     console.log(`Contenedor en ${server} apagado correctamente:`, response.data);
   } catch (error) {
@@ -210,7 +218,7 @@ app.post('/api/chaos', async (req, res) => {
 app.post('/api/kill-container', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
-  console.log(serversRegisters);
+console.log(serversRegisters);
   console.log(process.env.SERVER_1_IP);
   console.log(`Balanceador de carga ejecutándose en el puerto ${port}`);
 });

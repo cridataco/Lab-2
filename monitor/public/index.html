@@ -3,34 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de Servidores</title>
+    <title>Server Monitor</title>
     <link rel="stylesheet" href="index.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <h1>Monitor de Servidores</h1>
-
-    <div id="servers"></div>
-    <div id="logs"></div>
-
-    <script>
-        const socket = io();
-
-        socket.on('updateServers', (servers) => {
-            const serversDiv = document.getElementById('servers');
-            serversDiv.innerHTML = '<h2>Servidores</h2>';
-            servers.forEach(server => {
-                serversDiv.innerHTML += `<p>${server.server} - ${server.status} - ${new Date(server.timestamp).toLocaleTimeString()}</p>`;
-            });
-        });
-
-        socket.on('updateLogs', (logs) => {
-            const logsDiv = document.getElementById('logs');
-            logsDiv.innerHTML = '<h2>Logs</h2>';
-            logs.forEach(log => {
-                logsDiv.innerHTML += `<p>${log}</p>`;
-            });
-        });
-    </script>
+    <div class="container">
+        <h1>Server Monitor</h1>
+        <div id="serverStatusContainer"></div>
+    </div>
+    <script src="monitor.js"></script>
 </body>
 </html>
