@@ -104,7 +104,6 @@ const registerWithRegistry = async () => {
   const ipAddresses = getWifiIP();
     const registryUrl = `http://${hostIp}:5000/register`;
     const serverUrl = `http://${ipAddresses}:${port}`;
-    console.log(serverUrl);
 
     try {
         await axios.post(registryUrl, { server: serverUrl });

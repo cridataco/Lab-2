@@ -6,8 +6,6 @@ COPY package*.json ./
 
 COPY .env ./
 
-COPY kill_container.sh /app/
-
 RUN npm install
 
 COPY . .

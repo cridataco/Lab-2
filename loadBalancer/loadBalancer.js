@@ -7,6 +7,7 @@ const { io } = require("socket.io-client");
 const multer = require("multer");
 const FormData = require('form-data');
 const { Client } = require('ssh2');
+const os = require('os');
 
 const app = express();
 const port = process.env.MIDDLEWAREPORT || 5001;
@@ -55,10 +56,29 @@ function getRandomPort() {
   return port;
 }
 
+function getWifiIP() {
+  const networkInterfaces = os.networkInterfaces();
+  let wifiInterfaceNames = ['Wi-Fi', 'WLAN', 'wlan0', 'en0'];
+  let wifiIP = null;
+
+  for (let iface of wifiInterfaceNames) {
+    if (networkInterfaces[iface]) {
+      networkInterfaces[iface].forEach((ifaceDetails) => {
+        if (ifaceDetails.family === 'IPv4' && !ifaceDetails.internal) {
+          wifiIP = ifaceDetails.address;
+        }
+      });
+    }
+  }
+
+  return wifiIP ? wifiIP : 'WiFi interface not found or not connected';
+}
+
 app.post('/deploy', async (req, res) => {
+  const hostIp = getWifiIP();
   const randomServer = getRandomServer();
   const randomPort = getRandomPort();
-  const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name ${randomPort} -e PORT=${randomPort} instancia`;
+  const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name ${randomPort} -e PORT=${randomPort} -e HOST_IP=${hostIp} imagen`;
   const conn = new Client();
   conn.on('ready', () => {
     console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${dockerCommand}`);
@@ -270,6 +290,5 @@ app.post('/api/kill-container', upload.single('image'), balanceLoad);
 
 app.listen(port, () => {
 console.log(serversRegisters);
-  console.log(process.env.SERVER_1_IP);
   console.log(`Balanceador de carga ejecutándose en el puerto ${port}`);
 });
