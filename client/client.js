@@ -1,3 +1,5 @@
+const ip = '172.20.10.4';
+
 document.addEventListener('DOMContentLoaded', function () {
     const submitButton = document.getElementById('submitButton');
     const killContainerButton = document.getElementById('killContainerButton');
@@ -9,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
       console.log("Levantando contenedor...");
   
       try {
-        const response = await fetch('http://localhost:5001/deploy', {
+        const response = await fetch(`http://${ip}:5001/deploy`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -32,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
     killContainerButton.addEventListener('click', async () => {
         console.log("Tumbar instancia");
         try {
-            const response = await fetch('http://localhost:5001/api/chaos', {
+            const response = await fetch(`http://${ip}:5001/api/chaos`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -66,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
         formData.append('watermarkText', text);  
         try {
             
-            const response = await fetch('http://localhost:5001/api/add-watermark', {
+            const response = await fetch(`http://${ip}:5001/api/add-watermark`, {
                 method: 'POST',
                 body: formData,
             });

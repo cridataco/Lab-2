@@ -184,17 +184,17 @@ function updateLogTable(tableBody, log) {
     }
 }
 
-document.getElementById('healthCheckButton').addEventListener('click', () => {
-    socket.emit('performHealthCheck');
-});
+// document.getElementById('healthCheckButton').addEventListener('click', () => {
+//     socket.emit('performHealthCheck');
+// });
 
-document.addEventListener('DOMContentLoaded', () => {
-  const healthCheckButton = document.getElementById('healthCheckButton');
-  if (healthCheckButton) {
-      healthCheckButton.addEventListener('click', () => {
-          socket.emit('performHealthCheck');
-      });
-  } else {
-      console.error('Elemento con ID healthCheckButton no encontrado.');
-  }
-});
+// document.addEventListener('DOMContentLoaded', () => {
+//   const healthCheckButton = document.getElementById('healthCheckButton');
+//   if (healthCheckButton) {
+//       healthCheckButton.addEventListener('click', () => {
+//           socket.emit('performHealthCheck');
+//       });
+//   } else {
+//       console.error('Elemento con ID healthCheckButton no encontrado.');
+//   }
+// });

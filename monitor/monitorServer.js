@@ -42,6 +42,8 @@ socket.on('healthCheck', ({ server, status }) => {
 });
 
 socket.on('logAction', ({ server, log }) => {
+  console.log(server);
+  console.log(log);
   if (serverLogs.has(server)) {
     serverLogs.get(server).push(log);
   } else {
@@ -49,6 +51,7 @@ socket.on('logAction', ({ server, log }) => {
   }
   emitLogUpdates();
 });
+
 
 function emitServerUpdates() {
   const serverInfo = servers.map(s => ({
@@ -58,6 +61,10 @@ function emitServerUpdates() {
   }));
   io.emit('updateServers', serverInfo);
 }
+
+setInterval(async () => {
+  console.log(serverLogs)
+}, 10000);
 
 function emitLogUpdates() {
   const logEntries = Array.from(serverLogs.entries()).flatMap(([server, logs]) => logs.map(log => ({

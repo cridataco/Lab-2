@@ -145,7 +145,7 @@ const logAction = (req, res, server, status) => {
     bytesSent: res.get('Content-Length') || 0,
     user_agent: req.get('User-Agent')
   };
-
+  console.log('xdxdxdxd')
   console.log(logEntry);
   console.log(JSON.stringify(logObject));
   socket.emit('logAction', logObject);
@@ -288,7 +288,9 @@ app.post('/api/chaos', (req, res) => {
   const ip = random[0].match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)[0];
   const server = serversRegisters.find((server) => server.ip === ip);
   const port = random[0].split(':')[2];
-  const dockerCommand = `docker rm -f ${port}`;
+  const dockerCommand = `sudo docker rm -f ${port}`;
+
+  console.log(server);
 
   const conn = new Client();
   
