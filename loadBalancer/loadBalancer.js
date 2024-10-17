@@ -6,6 +6,7 @@ const cors = require("cors");
 const { io } = require("socket.io-client");
 const multer = require("multer");
 const FormData = require('form-data');
+const { Client } = require('ssh2');
 
 const app = express();
 const port = process.env.MIDDLEWAREPORT || 5001;
@@ -42,70 +43,52 @@ const serversRegisters = [
 function getRandomServer() {
   const randomIndex = Math.floor(Math.random() * serversRegisters.length);
   return serversRegisters[randomIndex];
-}
-
-async function installDependencies(ssh) {
-  const installDocker = `
-    if ! command -v docker &> /dev/null; then
-      echo "Docker no está instalado. Instalando Docker..."
-      sudo apt-get update
-      sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-      sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-      sudo apt-get update
-      sudo apt-get install -y docker-ce
-    else
-      echo "Docker ya está instalado."
-    fi
-  `;
-  const installGit = `
-    if ! command -v git &> /dev/null; then
-      echo "Git no está instalado. Instalando Git..."
-      sudo apt-get update
-      sudo apt-get install -y git
-    else
-      echo "Git ya está instalado."
-    fi
-  `;
-
-  await ssh.execCommand(installDocker);
-  await ssh.execCommand(installGit);
-}
+} 
 
 app.post('/deploy', async (req, res) => {
-  console.log('xd')
   const randomServer = getRandomServer();
-  console.log(randomServer);
+  const dockerCommand = `sudo docker run -d -p ${randomServer.port}:${randomServer.port} -e PORT=${randomServer.port} instancia`;
 
-  try {
-    await ssh.connect({
-      host: randomServer.ip,
-      port: randomServer.port,
-      username: randomServer.user,
-    });
-    console.log(`Conectado al servidor: ${randomServer.ip}`);
-    
-    await installDependencies(ssh);
-    console.log(`1`);
-    
-    const repoUrl = 'https://github.com/cridataco/Lab-2';
-    const dockerCommand = `docker run -it -p ${randomServer.port}:${randomServer.port} --name ${randomServer.serverName} -e PORT=${randomServer.port} instancia1`;
-    
-    const result = await ssh.execCommand(`git clone ${repoUrl} && ${dockerCommand}`, { cwd: '/home/usuario/' });
-    console.log(`2`);
+  const conn = new Client();
 
-    if (result.stderr) {
-      throw new Error(`Error al ejecutar el comando: ${result.stderr}`);
-    }
-
-    console.log('Repositorio clonado y Docker levantado:', result.stdout);
-    res.json({ success: true, message: 'Instancia desplegada correctamente.' });
-  } catch (err) {
-    console.error('Error en la conexión o comando:', err);
-    res.status(500).json({ success: false, message: err.message });
-  } finally {
-    ssh.dispose(); // Cerrar la conexión SSH
-  }
+  conn.on('ready', () => {
+    console.log(`Conectado al servidor SSH. Ejecutando comando Docker: ${dockerCommand}`);
+    conn.exec(dockerCommand, { pty: true }, (err, stream) => {
+      if (err) {
+          console.error(`Error al ejecutar el comando Docker: ${err.message}`);
+          return res.status(500).json({ message: 'Error al ejecutar el comando Docker', error: err.message });
+      }
+      let output = '';
+      let errorOutput = '';
+      stream.on('data', (data) => {
+          output += data.toString();
+      });
+      stream.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+      });
+  
+      stream.on('close', (code, signal) => {
+          conn.end();
+  
+          if (code === 0) {
+              console.log(`Comando Docker ejecutado con éxito: ${output}`);
+              res.status(200).json({ message: 'Instancia de Docker desplegada con éxito', output });
+          } else {
+              console.error(`El comando Docker falló con código: ${code}, señal: ${signal}`);
+              res.status(500).json({ message: 'Error al desplegar la instancia de Docker', error: errorOutput });
+          }
+      });
+  });
+  
+  }).on('error', (err) => {
+    console.error(`Error de conexión SSH: ${err.message}`);
+    res.status(500).json({ message: 'Error de conexión SSH', error: err.message });
+  }).connect({
+    host: '192.168.1.70',
+    port: 22,
+    username: 'deam',
+    password: 'deam'
+  });
 });
 
 socket.on('updateServers', (updatedServers) => {

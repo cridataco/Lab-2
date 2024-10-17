@@ -21,8 +21,10 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/add-watermark', upload.single('image'), async (req, res) => {
+    console.log('add-watermar');
     try {
         const { buffer } = req.file;
+        console.log(buffer);
         const { watermarkText } = req.body; 
 
         if (!buffer || !watermarkText) {
@@ -80,8 +82,8 @@ app.get('/shutdown', async (req, res) => {
 });
 
 const registerWithRegistry = async () => {
-    const registryUrl = 'http://172.22.144.1:5000/register';
-    const serverUrl = `http://172.22.144.1:${port}`;
+    const registryUrl = 'http://172.20.10.2:5000/register';
+    const serverUrl = `http://172.20.10.4:${port}`;
 
     try {
         await axios.post(registryUrl, { server: serverUrl });
@@ -95,3 +97,72 @@ app.listen(port, () => {
     console.log(`Instancia ejecutándose en el puerto ${port}`);
     registerWithRegistry();
 });
+
+
+
+
+const runScriptOnServer = (server, port, discoveryUrl, imageName, passHost, githubToken, ipServer) => {
+    return new Promise((resolve, reject) => {
+      const conn = new Client();
+      conn
+        .on('ready', () => {
+          console.log(`Conectado a ${server.host}`);
+  
+          const localScriptPath = path.join(__dirname, 'deploy-backend.sh');
+          const remoteScriptPath = '/tmp/deploy-backend.sh';
+  
+          conn.sftp((err, sftp) => {
+            if (err) {
+              reject(`Error en SFTP: ${err.message}`);
+              return;
+            }
+  
+            sftp.fastPut(localScriptPath, remoteScriptPath, {}, (err) => {
+              if (err) {
+                reject(`Error al copiar el script: ${err.message}`);
+                return;
+              }
+  
+              const commandToMakeExecutable = `chmod +x ${remoteScriptPath}`;
+              conn.exec(commandToMakeExecutable, (err) => {
+                if (err) {
+                  reject(`Error al hacer ejecutable el script: ${err.message}`);
+                  return;
+                }
+  
+                const commandToExecute = `bash ${remoteScriptPath} ${port} ${discoveryUrl} ${imageName} ${passHost} ${githubToken} ${ipServer}`;
+                conn.exec(commandToExecute, { pty: true }, (err, stream) => {
+                  if (err) {
+                    reject(err);
+                    return;
+                  }
+  
+                  stream
+                    .on('close', (code) => {
+                      console.log(`Comando ejecutado con código: ${code}`);
+                      conn.end();
+                      resolve(`Instancia lanzada en ${server.host}`);
+                    })
+                    .on('data', (data) => {
+                      console.log(`Salida: ${data}`);
+                    })
+                    .stderr.on('data', (data) => {
+                      console.error(`Error: ${data}`);
+                      reject(data.toString());
+                    });
+                });
+              });
+            });
+          });
+        })
+        .on('error', (err) => {
+          reject(`Error de conexión: ${err.message}`);
+        })
+        .connect({
+          host: server.host,
+          username: server.user,
+          password: server.password,
+          port: 3000,
+        });
+    });
+  };
